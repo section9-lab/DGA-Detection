@@ -1,9 +1,7 @@
 软件版本
 ```
-Anaconda 3-5.2.0
-tensorflow 2.0.0
-python 3.6.5
-
+python v3.9
+pytorch v1.12.0
 ```
 ```
 ├── date/
