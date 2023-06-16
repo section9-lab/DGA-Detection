@@ -3,6 +3,11 @@
 python v3.8.10
 pytorch v2.0.1
 ```
+install pytorch
+```
+pip3 install torch torchvision torchaudio
+```
+
 ```
 ├── date/
 │   ├── alexa_top_10w.txt
