@@ -1,7 +1,7 @@
 软件版本
 ```
-python v3.9
-pytorch v1.12.0
+python v3.8.10
+pytorch v2.0.1
 ```
 ```
 ├── date/
