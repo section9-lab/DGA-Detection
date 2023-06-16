@@ -1,8 +1,4 @@
-from models import lstm
-
-
-def run():
-  pass
+import torch
 
 if __name__ == "__main__":
-  run()
+    print("pytorch-version: " + torch.__version__)
