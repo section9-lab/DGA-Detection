@@ -1,17 +1,13 @@
-# main.py - FastAPI application for DGA domain detection
+# app.py - Flask application for DGA domain detection
 import os
 import pickle
 import numpy as np
-from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from flask import Flask, request, jsonify, render_template, url_for
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from pydantic import BaseModel
-import uvicorn
+import json
 
 # Define the custom AttentionLayer class
 class AttentionLayer(Layer):
@@ -46,43 +42,23 @@ class AttentionLayer(Layer):
         config = super(AttentionLayer, self).get_config()
         return config
 
-# Create FastAPI app
-app = FastAPI(
-    title="DGA Domain Detection API",
-    description="API for detecting Domain Generation Algorithm (DGA) domains using LSTM+Attention model",
-    version="1.0.0"
-)
+# Initialize Flask application
+app = Flask(__name__)
 
-# Setup templates and static files
-templates = Jinja2Templates(directory="templates")
-if not os.path.exists("templates"):
-    os.makedirs("templates")
-
-if not os.path.exists("static"):
-    os.makedirs("static")
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Define request and response models
-class DomainRequest(BaseModel):
-    domain: str
-
-class DomainResponse(BaseModel):
-    domain: str
-    prediction: str
-    is_dga: bool
-    confidence: float
+# Global variables for model, tokenizer, and configuration
+model = None
+tokenizer = None
+max_length = None
 
 # Load model and preprocessing components
-@app.on_event("startup")
-async def load_detection_model():
+def load_detection_model():
     global model, tokenizer, max_length
     
     try:
         print("Loading model and preprocessing components...")
         
         # Load the model with custom objects
-        model_path = "../ML_v2/dga_lstm_attention_model.h5"
+        model_path = "ML_v2/dga_lstm_attention_model.h5"
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found at {model_path}")
         
@@ -91,7 +67,7 @@ async def load_detection_model():
         model = load_model(model_path, custom_objects=custom_objects)
         
         # Load tokenizer
-        tokenizer_path = "../ML_v2/dga_tokenizer.pickle"
+        tokenizer_path = "ML_v2/dga_tokenizer.pickle"
         if not os.path.exists(tokenizer_path):
             raise FileNotFoundError(f"Tokenizer file not found at {tokenizer_path}")
             
@@ -99,7 +75,7 @@ async def load_detection_model():
             tokenizer = pickle.load(handle)
         
         # Load config
-        config_path = "../ML_v2/dga_config.pickle"
+        config_path = "ML_v2/dga_config.pickle"
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Config file not found at {config_path}")
             
@@ -108,10 +84,11 @@ async def load_detection_model():
             max_length = config['max_length']
         
         print("Model and components loaded successfully!")
+        return True
         
     except Exception as e:
         print(f"Error loading model: {str(e)}")
-        raise e
+        return False
 
 # Predict function
 def predict_domain(domain):
@@ -132,11 +109,12 @@ def predict_domain(domain):
         "confidence": float(confidence)
     }
 
-# API routes
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    """Render the home page with a form to test domain detection"""
-    # Create an HTML template if it doesn't exist
+# Create templates directory and files if they don't exist
+def create_templates():
+    if not os.path.exists("templates"):
+        os.makedirs("templates")
+    
+    # Create index.html template
     if not os.path.exists("templates/index.html"):
         with open("templates/index.html", "w") as f:
             f.write("""
@@ -161,7 +139,7 @@ async def home(request: Request):
                     <div class="mb-3">
                         <label for="domain" class="form-label">Domain Name:</label>
                         <input type="text" class="form-control" id="domain" name="domain" required
-                               placeholder="Enter a domain name (baidu.com、google.com、cvyh1po636avyrsxebwbkn7.ddns.net)">
+                               placeholder="Enter a domain name (e.g., google.com, example.net)">
                     </div>
                     <button type="submit" class="btn btn-primary">Check Domain</button>
                 </form>
@@ -194,57 +172,90 @@ async def home(request: Request):
             </div>
         </div>
         {% endif %}
+
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">API Usage</h5>
+                <p>You can also use the API endpoint directly:</p>
+                <pre><code>POST /api/detect
+Content-Type: application/json
+
+{
+    "domain": "example.com"
+}</code></pre>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
             """)
-    
-    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.post("/check", response_class=HTMLResponse)
-async def check_form(request: Request, domain: str = Form(...)):
+# Create necessary directories and templates
+create_templates()
+
+# Load model before handling requests
+if not load_detection_model():
+    raise RuntimeError("Failed to load model and components")
+
+# Routes definition
+@app.route('/')
+def home():
+    """Render the home page with a form to test domain detection"""
+    return render_template('index.html')
+
+@app.route('/check', methods=['POST'])
+def check_form():
     """Handle form submission and render results"""
-    result = predict_domain(domain)
-    return templates.TemplateResponse("index.html", {"request": request, "result": result})
-
-@app.post("/api/detect", response_model=DomainResponse)
-async def detect_domain(request: DomainRequest):
-    """API endpoint for domain detection"""
-    if not request.domain or len(request.domain.strip()) == 0:
-        raise HTTPException(status_code=400, detail="Domain cannot be empty")
+    domain = request.form.get('domain', '')
+    if not domain:
+        return render_template('index.html', error="Domain cannot be empty")
     
-    return predict_domain(request.domain)
+    result = predict_domain(domain)
+    return render_template('index.html', result=result)
 
-@app.get("/health")
-async def health_check():
+@app.route('/api/detect', methods=['POST'])
+def detect_domain():
+    """API endpoint for domain detection"""
+    data = request.get_json()
+    
+    if not data or 'domain' not in data:
+        return jsonify({"error": "Domain not provided"}), 400
+    
+    domain = data['domain']
+    if not domain or len(domain.strip()) == 0:
+        return jsonify({"error": "Domain cannot be empty"}), 400
+    
+    result = predict_domain(domain)
+    return jsonify(result)
+
+@app.route('/health', methods=['GET'])
+def health_check():
     """Health check endpoint"""
-    return {"status": "ok"}
+    return jsonify({"status": "ok"})
 
-# Batch processing endpoint
-@app.post("/api/batch-detect")
-async def batch_detect(domains: list[str]):
+@app.route('/api/batch-detect', methods=['POST'])
+def batch_detect():
     """Process multiple domains at once"""
-    if not domains or len(domains) == 0:
-        raise HTTPException(status_code=400, detail="Domain list cannot be empty")
+    domains = request.get_json()
+    
+    if not domains or not isinstance(domains, list):
+        return jsonify({"error": "Domain list not provided or invalid format"}), 400
     
     if len(domains) > 100:
-        raise HTTPException(status_code=400, detail="Maximum 100 domains allowed per request")
+        return jsonify({"error": "Maximum 100 domains allowed per request"}), 400
     
     results = []
     for domain in domains:
-        if domain and len(domain.strip()) > 0:
+        if domain and isinstance(domain, str) and len(domain.strip()) > 0:
             results.append(predict_domain(domain))
     
-    return {
+    return jsonify({
         "total": len(results),
         "results": results
-    }
+    })
 
-def main():
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-
+# Run the application
 if __name__ == "__main__":
-    main()
+    app.run(host='0.0.0.0', port=8000, debug=True)

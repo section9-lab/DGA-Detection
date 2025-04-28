@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.95.0",
+    "flask==2.2.3",
     "jinja2>=3.1.2",
     "matplotlib>=3.5.3",
     "pydantic>=1.10.7",
