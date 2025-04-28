@@ -1,7 +1,0 @@
-name = "dga"
-main = "src/worker.py"
-compatibility_flags = ["python_workers"]
-compatibility_date = "2024-12-14"
-
-[vars]
-MESSAGE = "This is an environment variable"

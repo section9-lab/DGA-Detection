@@ -1,22 +1,27 @@
-# FastAPI Example
+# DGA-Detection app
 
-Warning: Python support in Workers is experimental and things will break. This
-demo is meant for reference only right now; you should be prepared to update
-your code between now and official release time as APIs may change.
+## Tech Stack
 
-Currently, Python Workers using [packages](https://developers.cloudflare.com/workers/languages/python/packages/#supported-packages)
-**cannot be deployed** and will only work in local development for the time being.
+- Frontend: Vite, React, Tailwind, ShadCn, ReactQuery, ReactRouter, Vitest
+- Backend: Flask (flask-openapi3), SqlAlchemy, Pydantic, Pytest
 
-## How to Run
 
-First ensure that your Wrangler version is up to date (3.30.0 and above).
+## How to run the project
 
-```bash
-$ wrangler -v
- ⛅️ wrangler 3.30.0
+Install npm packages & python packages
+
+```
+cd frontend
+pnpm install
+cd ../backend
+uv pip install .
 ```
 
-Now, if you run `wrangler dev` within this directory, it should use the config
-in `wrangler.toml` to run the demo.
+Run frontend and backend
 
-You can also run `wrangler deploy` to deploy the demo.
+```
+pnpm run dev
+python3 src/run.py
+```
+
+Open app in browser
